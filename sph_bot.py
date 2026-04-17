@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")          # Google Sheets utama
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")          # Google Sheets utama (DB_UTAMA_PT3D)
+RS_SPREADSHEET_ID = "1EbPsEeNzZRPSWvXw6ZIeXlZUlfxmvvbaM_ptSKGMfPE"  # Database RS
 TEMPLATE_DOC_ID = os.environ.get("TEMPLATE_DOC_ID")        # Google Docs template SPH
 SPH_FOLDER_ID = os.environ.get("SPH_FOLDER_ID")            # Google Drive folder output
 
@@ -61,7 +62,7 @@ def lookup_sales(telegram_id):
 def search_rs(query):
     gc = get_sheets()
     # Cari sheet RS - sesuaikan nama sheet
-    ws = gc.open_by_key(SPREADSHEET_ID).worksheet("Master_RS")
+    ws = gc.open_by_key(RS_SPREADSHEET_ID).worksheet("Sheet1")
     records = ws.get_all_records()
     query_lower = query.lower()
     return [r for r in records if query_lower in str(r.get("NAMA RS", "")).lower()][:8]
