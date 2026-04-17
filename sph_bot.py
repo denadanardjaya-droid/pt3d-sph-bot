@@ -33,7 +33,8 @@ def get_google_creds():
     return Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 
 def get_sheets():
-    return gspread.authorize(get_google_creds())
+    creds = get_google_creds()
+    return gspread.Client(auth=creds)
 
 # ─── SESSION STORE (in-memory) ────────────────────────────────────────────────
 sessions = {}
