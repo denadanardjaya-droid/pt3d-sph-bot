@@ -75,7 +75,7 @@ def get_all_products():
 
 def get_products_by_merk(merk):
     products = get_all_products()
-    return [p for p in products if p.get("Merk") == merk]
+    return [p for p in products if p.get("Merek") == merk]
 
 def get_sph_counter(sales_kode):
     gc = get_sheets()
@@ -268,7 +268,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_session(user_id, session)
 
         products = get_all_products()
-        merks = sorted(set(p["Merk"] for p in products if p.get("Merk")))
+        merks = sorted(set(p["Merek"] for p in products if p.get("Merek")))
         keyboard = []
         for i in range(0, len(merks), 2):
             row = [InlineKeyboardButton(merks[i], callback_data=f"merk:{merks[i]}")]
@@ -291,8 +291,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         items = get_products_by_merk(merk)
         keyboard = [[InlineKeyboardButton(
-            f"{p.get('Nama_Produk', p.get('Item', ''))}",
-            callback_data=f"item:{p.get('ID', p.get('Kode', ''))}"
+            f"{p.get('Item Name', '')}",
+            callback_data=f"item:{p.get('Item ID', '')}"
         )] for p in items[:20]]
 
         await query.edit_message_text(
@@ -305,17 +305,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("item:"):
         item_id = data[5:]
         products = get_all_products()
-        item = next((p for p in products if str(p.get("ID", p.get("Kode", ""))) == item_id), None)
+        item = next((p for p in products if str(p.get("Item ID", "")) == item_id), None)
         if not item:
             await query.edit_message_text("❌ Item tidak ditemukan.")
             return
 
         session["pending_item"] = {
             "id": item_id,
-            "nama": item.get("Nama_Produk", item.get("Item", "")),
+            "nama": item.get("Item Name", ""),
             "unit": item.get("Unit", ""),
-            "harga": item.get("Harga", 0),
-            "link": item.get("Link_Ekat", "")
+            "harga": item.get("Harga E-Cat 2026", 0),
+            "link": item.get("Link E-katalog V6", "")
         }
         session["step"] = "waiting_qty"
         set_session(user_id, session)
@@ -333,7 +333,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_session(user_id, session)
 
         products = get_all_products()
-        merks = sorted(set(p["Merk"] for p in products if p.get("Merk")))
+        merks = sorted(set(p["Merek"] for p in products if p.get("Merek")))
         keyboard = []
         for i in range(0, len(merks), 2):
             row = [InlineKeyboardButton(merks[i], callback_data=f"merk:{merks[i]}")]
