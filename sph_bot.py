@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")          # Google Sheets utama (DB_UTAMA_PT3D)
 RS_SPREADSHEET_ID = "1EbPsEeNzZRPSWvXw6ZIeXlZUlfxmvvbaM_ptSKGMfPE"  # Database RS
+PRODUK_SPREADSHEET_ID = "155FVVVuN9hWzR_TvKvvQFHx4-45xWFV6_j8OMRm83Bo"  # Database Produk
 TEMPLATE_DOC_ID = os.environ.get("TEMPLATE_DOC_ID")        # Google Docs template SPH
 SPH_FOLDER_ID = os.environ.get("SPH_FOLDER_ID")            # Google Drive folder output
 
@@ -69,7 +70,7 @@ def search_rs(query):
 
 def get_all_products():
     gc = get_sheets()
-    ws = gc.open_by_key(SPREADSHEET_ID).worksheet("Master_Produk")
+    ws = gc.open_by_key(PRODUK_SPREADSHEET_ID).worksheet("Sheet1")
     return ws.get_all_records()
 
 def get_products_by_merk(merk):
