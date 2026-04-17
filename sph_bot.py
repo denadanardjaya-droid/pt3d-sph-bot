@@ -71,7 +71,20 @@ def search_rs(query):
 def get_all_products():
     gc = get_sheets()
     ws = gc.open_by_key(PRODUK_SPREADSHEET_ID).worksheet("Sheet1")
-    return ws.get_all_records()
+    values = ws.get_all_values()
+    if not values:
+        return []
+    headers = values[0]
+    records = []
+    for row in values[1:]:
+        record = {}
+        for i, val in enumerate(row):
+            if i < len(headers):
+                key = headers[i] if headers[i] else f"col_{i}"
+                if key not in record:
+                    record[key] = val
+        records.append(record)
+    return records
 
 def get_products_by_merk(merk):
     products = get_all_products()
