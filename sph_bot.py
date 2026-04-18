@@ -138,12 +138,27 @@ def generate_sph_pdf(session):
 
     sph_data = session["sph_data"]
 
-    # 1. Copy template
+    # 1. Copy template (tanpa parents dulu, hindari folder permission issue)
     copied = drive_service.files().copy(
         fileId=TEMPLATE_DOC_ID,
-        body={"name": sph_data["no_sph"], "parents": [SPH_FOLDER_ID]}
+        body={"name": sph_data["no_sph"]}
     ).execute()
     doc_id = copied["id"]
+    
+    # Move ke folder jika SPH_FOLDER_ID tersedia
+    if SPH_FOLDER_ID:
+        try:
+            # Get current parents
+            file_meta = drive_service.files().get(fileId=doc_id, fields="parents").execute()
+            prev_parents = ",".join(file_meta.get("parents", []))
+            drive_service.files().update(
+                fileId=doc_id,
+                addParents=SPH_FOLDER_ID,
+                removeParents=prev_parents,
+                fields="id, parents"
+            ).execute()
+        except Exception as e:
+            logging.warning(f"Gagal move ke folder: {e}")
 
     # 2. Build item rows text
     item_rows = "\n".join([
