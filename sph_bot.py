@@ -138,27 +138,13 @@ def generate_sph_pdf(session):
 
     sph_data = session["sph_data"]
 
-    # 1. Copy template (tanpa parents dulu, hindari folder permission issue)
+    # 1. Copy template ke shared drive PT3D (supportsAllDrives)
     copied = drive_service.files().copy(
         fileId=TEMPLATE_DOC_ID,
-        body={"name": sph_data["no_sph"]}
+        body={"name": sph_data["no_sph"], "parents": [SPH_FOLDER_ID]},
+        supportsAllDrives=True
     ).execute()
     doc_id = copied["id"]
-    
-    # Move ke folder jika SPH_FOLDER_ID tersedia
-    if SPH_FOLDER_ID:
-        try:
-            # Get current parents
-            file_meta = drive_service.files().get(fileId=doc_id, fields="parents").execute()
-            prev_parents = ",".join(file_meta.get("parents", []))
-            drive_service.files().update(
-                fileId=doc_id,
-                addParents=SPH_FOLDER_ID,
-                removeParents=prev_parents,
-                fields="id, parents"
-            ).execute()
-        except Exception as e:
-            logging.warning(f"Gagal move ke folder: {e}")
 
     # 2. Build item rows text
     item_rows = "\n".join([
@@ -176,18 +162,25 @@ def generate_sph_pdf(session):
         "{{posisiSales}}": sph_data["sales_posisi"],
         "{{ttdSales}}": "",
     }
-    requests = []
+    reqs = []
     for find, replace in replacements.items():
-        requests.append({
+        reqs.append({
             "replaceAllText": {
                 "containsText": {"text": find, "matchCase": True},
                 "replaceText": replace
             }
         })
-    docs_service.documents().batchUpdate(documentId=doc_id, body={"requests": requests}).execute()
+    docs_service.documents().batchUpdate(documentId=doc_id, body={"requests": reqs}).execute()
 
     # 4. Export as PDF
     pdf_data = drive_service.files().export(fileId=doc_id, mimeType="application/pdf").execute()
+    
+    # 5. Hapus file dari Drive setelah export
+    try:
+        drive_service.files().delete(fileId=doc_id, supportsAllDrives=True).execute()
+    except Exception as e:
+        logging.warning(f"Gagal hapus file Drive: {e}")
+    
     return pdf_data, sph_data["no_sph"]
 
 # ─── HANDLERS ─────────────────────────────────────────────────────────────────
