@@ -42,7 +42,10 @@ def get_sheets():
 sessions = {}
 
 def get_session(user_id):
-    return sessions.get(str(user_id), {"step": "idle"})
+    session = sessions.get(str(user_id), {"step": "idle"})
+    if "items" not in session:
+        session["items"] = []
+    return session
 
 def set_session(user_id, data):
     sessions[str(user_id)] = data
@@ -92,7 +95,7 @@ def get_products_by_merk(merk):
 
 def get_sph_counter(sales_kode):
     gc = get_sheets()
-    ws = gc.open_by_key(SPREADSHEET_ID).worksheet("SPH_Counter")
+    ws = gc.open_by_key(SPREADSHEET_ID).worksheet("Sales_Counter")
     records = ws.get_all_records()
     now = datetime.now()
     for r in records:
@@ -105,7 +108,7 @@ BULAN_ROMAWI = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"]
 
 def update_sph_counter(sales_kode, new_counter):
     gc = get_sheets()
-    ws = gc.open_by_key(SPREADSHEET_ID).worksheet("SPH_Counter")
+    ws = gc.open_by_key(SPREADSHEET_ID).worksheet("Sales_Counter")
     now = datetime.now()
     records = ws.get_all_records()
     for i, r in enumerate(records):
@@ -303,10 +306,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_session(user_id, session)
 
         items = get_products_by_merk(merk)
-        keyboard = [[InlineKeyboardButton(
-            f"{p.get('Item Name', '')}",
-            callback_data=f"item:{p.get('Item ID', '')}"
-        )] for p in items[:20]]
+        keyboard = []
+        for idx, p in enumerate(items[:20]):
+            item_name = p.get('Item Name', '')[:40]
+            item_id = str(p.get('Item ID', ''))[:20]
+            cb = f"item:{item_id}"
+            if len(cb) > 64:
+                cb = f"itx:{idx}:{merk[:10]}"
+            keyboard.append([InlineKeyboardButton(item_name, callback_data=cb)])
 
         await query.edit_message_text(
             f"*Merk: {merk}*\n\nPilih produk:",
@@ -327,7 +334,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "id": item_id,
             "nama": item.get("Item Name", ""),
             "unit": item.get("Unit", ""),
-            "harga": item.get("Harga E-Cat 2026", 0),
+            "harga": float(str(item.get("Harga E-Cat 2026", item.get("Harga E-Cat", item.get("Harga", 0)))).replace("Rp", "").replace(".", "").replace(",", "").strip() or 0),
             "link": item.get("Link E-katalog V6", "")
         }
         session["step"] = "waiting_qty"
