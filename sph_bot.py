@@ -310,10 +310,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = []
         for idx, p in enumerate(items[:20]):
             item_name = p.get('Item Name', '')[:40]
-            item_id = str(p.get('Item ID', ''))[:20]
-            cb = f"item:{item_id}"
-            if len(cb) > 64:
-                cb = f"itx:{idx}:{merk[:10]}"
+            cb = f"itx:{idx}"
             keyboard.append([InlineKeyboardButton(item_name, callback_data=cb)])
 
         await query.edit_message_text(
@@ -323,24 +320,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     # Pilih Item
-    elif data.startswith("item:") or data.startswith("itx:"):
-        products = get_all_products()
-        if data.startswith("itx:"):
-            # Format: itx:idx:merk - cari by index
-            parts = data.split(":")
-            try:
-                idx = int(parts[1])
-                merk_prefix = parts[2] if len(parts) > 2 else ""
-                merk = session.get("selected_merk", "")
-                items = get_products_by_merk(merk)
-                item = items[idx] if idx < len(items) else None
-                item_id = str(item.get("Item ID", "")) if item else ""
-            except (ValueError, IndexError):
-                item = None
-                item_id = ""
-        else:
-            item_id = data[5:]
-            item = next((p for p in products if str(p.get("Item ID", "")) == item_id), None)
+    elif data.startswith("itx:"):
+        merk = session.get("selected_merk", session.get("current_merk", ""))
+        items = get_products_by_merk(merk)
+        try:
+            idx = int(data.split(":")[1])
+            item = items[idx] if idx < len(items) else None
+            item_id = str(item.get("Item ID", "")) if item else ""
+        except (ValueError, IndexError):
+            item = None
+            item_id = ""
         if not item:
             await query.edit_message_text("❌ Item tidak ditemukan.")
             return
