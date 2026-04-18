@@ -302,6 +302,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("merk:"):
         merk = data[5:]
         session["current_merk"] = merk
+        session["selected_merk"] = merk
         session["step"] = "waiting_item"
         set_session(user_id, session)
 
@@ -322,10 +323,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     # Pilih Item
-    elif data.startswith("item:"):
-        item_id = data[5:]
+    elif data.startswith("item:") or data.startswith("itx:"):
         products = get_all_products()
-        item = next((p for p in products if str(p.get("Item ID", "")) == item_id), None)
+        if data.startswith("itx:"):
+            # Format: itx:idx:merk - cari by index
+            parts = data.split(":")
+            try:
+                idx = int(parts[1])
+                merk_prefix = parts[2] if len(parts) > 2 else ""
+                merk = session.get("selected_merk", "")
+                items = get_products_by_merk(merk)
+                item = items[idx] if idx < len(items) else None
+                item_id = str(item.get("Item ID", "")) if item else ""
+            except (ValueError, IndexError):
+                item = None
+                item_id = ""
+        else:
+            item_id = data[5:]
+            item = next((p for p in products if str(p.get("Item ID", "")) == item_id), None)
         if not item:
             await query.edit_message_text("❌ Item tidak ditemukan.")
             return
