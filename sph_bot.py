@@ -345,11 +345,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("❌ Item tidak ditemukan.")
             return
 
-        raw_harga = item.get("Harga E-Cat 2026", item.get("Harga E-Cat", item.get("Harga", 0)))
         logging.info(f"Item keys: {list(item.keys())}")
-        logging.info(f"Raw harga value: {raw_harga!r}")
+        # Cari kolom harga dengan flexible matching (handle spasi di nama kolom)
+        harga_raw = None
+        for key in item.keys():
+            if 'Harga' in key and 'Cat' in key:
+                harga_raw = item[key]
+                logging.info(f"Found harga key: {key!r} = {harga_raw!r}")
+                break
+        if harga_raw is None:
+            harga_raw = 0
         try:
-            harga_clean = str(raw_harga).replace("Rp.", "").replace("Rp", "").replace(".", "").replace(",", "").strip()
+            harga_clean = str(harga_raw).replace("Rp.", "").replace("Rp", "").replace(".", "").replace(",", "").strip()
             harga_float = float(harga_clean) if harga_clean else 0
         except:
             harga_float = 0
@@ -393,6 +400,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Generate SPH
     elif data == "action:generate":
+        if "sales" not in session:
+            await query.edit_message_text("❌ Session expired. Silakan mulai ulang dengan /sph")
+            return
         await query.edit_message_text("⏳ Membuat SPH, mohon tunggu...")
 
         now = datetime.now()
