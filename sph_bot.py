@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+import requests as http_requests
+import base64
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -131,56 +133,29 @@ def log_sph(no_sph, tanggal, sales_kode, sales_nama, nama_rs, total_items):
                    f"https://drive.google.com/drive/folders/{SPH_FOLDER_ID}"])
 
 # ─── GENERATE SPH PDF ─────────────────────────────────────────────────────────
+APPS_SCRIPT_URL = os.environ.get("APPS_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbyU1jE2-LBjLXcO5ynZkx3UvRdDAz_9_ss0IA80HAY6FNninUR3o6Oaeq7BrLnZ2K15/exec")
+
 def generate_sph_pdf(session):
-    creds = get_google_creds()
-    drive_service = build("drive", "v3", credentials=creds)
-    docs_service = build("docs", "v1", credentials=creds)
-
     sph_data = session["sph_data"]
-
-    # 1. Copy template ke shared drive PT3D (supportsAllDrives)
-    copied = drive_service.files().copy(
-        fileId=TEMPLATE_DOC_ID,
-        body={"name": sph_data["no_sph"], "parents": [SPH_FOLDER_ID]},
-        supportsAllDrives=True
-    ).execute()
-    doc_id = copied["id"]
-
-    # 2. Build item rows text
-    item_rows = "\n".join([
-        f"{i+1}. {item['nama']} | {item['unit']} | Rp {item['harga']:,} | {item['qty']}"
-        for i, item in enumerate(sph_data["items"])
-    ])
-
-    # 3. Replace placeholders
-    replacements = {
-        "{{tanggal}}": sph_data["tanggal"],
-        "{{noSPHID}}": sph_data["no_sph"],
-        "{{nama RS}}": sph_data["nama_rs"],
-        "{{itemRow}}": item_rows,
-        "{{namaSales}}": sph_data["sales_nama"],
-        "{{posisiSales}}": sph_data["sales_posisi"],
-        "{{ttdSales}}": "",
+    
+    # Kirim data ke Apps Script
+    payload = {
+        "no_sph": sph_data["no_sph"],
+        "tanggal": sph_data["tanggal"],
+        "nama_rs": sph_data["nama_rs"],
+        "sales_nama": sph_data["sales_nama"],
+        "sales_posisi": sph_data["sales_posisi"],
+        "items": sph_data["items"]
     }
-    reqs = []
-    for find, replace in replacements.items():
-        reqs.append({
-            "replaceAllText": {
-                "containsText": {"text": find, "matchCase": True},
-                "replaceText": replace
-            }
-        })
-    docs_service.documents().batchUpdate(documentId=doc_id, body={"requests": reqs}).execute()
-
-    # 4. Export as PDF
-    pdf_data = drive_service.files().export(fileId=doc_id, mimeType="application/pdf").execute()
     
-    # 5. Hapus file dari Drive setelah export
-    try:
-        drive_service.files().delete(fileId=doc_id, supportsAllDrives=True).execute()
-    except Exception as e:
-        logging.warning(f"Gagal hapus file Drive: {e}")
+    response = http_requests.post(APPS_SCRIPT_URL, json=payload, timeout=60)
+    result = response.json()
     
+    if not result.get("success"):
+        raise Exception(f"Apps Script error: {result.get('error', 'Unknown error')}")
+    
+    # Decode PDF dari base64
+    pdf_data = base64.b64decode(result["pdf_base64"])
     return pdf_data, sph_data["no_sph"]
 
 # ─── HANDLERS ─────────────────────────────────────────────────────────────────
