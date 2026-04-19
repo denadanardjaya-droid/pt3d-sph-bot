@@ -173,6 +173,7 @@ def generate_sph_pdf(session):
     # Kirim data ke Apps Script
     payload = {
         "no_sph": sph_data["no_sph"],
+        "sales_kode": sph_data.get("sales_kode", ""),
         "replacements": replacements
     }
     
