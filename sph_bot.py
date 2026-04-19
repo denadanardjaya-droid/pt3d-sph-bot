@@ -321,7 +321,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "id": item_id,
             "nama": item.get("Item Name", ""),
             "unit": item.get("Unit", ""),
-            "harga": float(str(item.get("Harga E-Cat 2026", item.get("Harga E-Cat", item.get("Harga", 0)))).replace("Rp", "").replace(".", "").replace(",", "").strip() or 0),
+            "harga": (lambda x: float(x.replace("Rp.", "").replace("Rp", "").replace(".", "").replace(",", "").strip()) if x.replace("Rp.", "").replace("Rp", "").replace(".", "").replace(",", "").strip() else 0)(str(item.get("Harga E-Cat 2026", item.get("Harga E-Cat", item.get("Harga", 0))))),
             "link": item.get("Link E-katalog V6", "")
         }
         session["step"] = "waiting_qty"
