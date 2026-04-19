@@ -133,7 +133,7 @@ def log_sph(no_sph, tanggal, sales_kode, sales_nama, nama_rs, total_items):
                    f"https://drive.google.com/drive/folders/{SPH_FOLDER_ID}"])
 
 # ─── GENERATE SPH PDF ─────────────────────────────────────────────────────────
-APPS_SCRIPT_URL = os.environ.get("APPS_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbyU1jE2-LBjLXcO5ynZkx3UvRdDAz_9_ss0IA80HAY6FNninUR3o6Oaeq7BrLnZ2K15/exec")
+APPS_SCRIPT_URL = os.environ.get("APPS_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbwTCl9VHk-nDHTj8evOesEWM3Tkk6t4GWajimz9EzUlqYBFvK7AnpQH7Qz1WNfWNns/exec")
 
 def generate_sph_pdf(session):
     sph_data = session["sph_data"]
