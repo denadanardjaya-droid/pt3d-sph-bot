@@ -138,14 +138,42 @@ APPS_SCRIPT_URL = os.environ.get("APPS_SCRIPT_URL", "https://script.google.com/m
 def generate_sph_pdf(session):
     sph_data = session["sph_data"]
     
+    # Build replacements per kolom per baris
+    replacements = {
+        "{{tanggal}}": sph_data["tanggal"],
+        "{{noSPHID}}": sph_data["no_sph"],
+        "{{nama RS}}": sph_data["nama_rs"],
+        "{{namaSales}}": sph_data["sales_nama"],
+        "{{posisiSales}}": sph_data["sales_posisi"],
+        "{{ttdSales}}": "",
+    }
+    
+    grand_total = 0
+    for i, item in enumerate(sph_data["items"], 1):
+        harga = float(item.get("harga", 0))
+        qty = int(item.get("qty", 0))
+        jumlah = harga * qty
+        grand_total += jumlah
+        replacements[f"{{{{no_{i}}}}}"] = str(i)
+        replacements[f"{{{{id_{i}}}}}"] = str(item.get("id", ""))
+        replacements[f"{{{{nama_{i}}}}}"] = str(item.get("nama", ""))
+        replacements[f"{{{{unit_{i}}}}}"] = str(item.get("unit", ""))
+        replacements[f"{{{{harga_{i}}}}}"] = f"Rp {harga:,.0f}".replace(",", ".")
+        replacements[f"{{{{qty_{i}}}}}"] = str(qty)
+        replacements[f"{{{{jumlah_{i}}}}}"] = f"Rp {jumlah:,.0f}".replace(",", ".")
+        replacements[f"{{{{link_{i}}}}}"] = str(item.get("link", ""))
+    
+    # Kosongkan placeholder yang tidak terpakai
+    for j in range(len(sph_data["items"]) + 1, 21):
+        for field in ["no", "id", "nama", "unit", "harga", "qty", "jumlah", "link"]:
+            replacements[f"{{{{{field}_{j}}}}}"] = ""
+    
+    replacements["{{total_grand}}"] = f"Rp {grand_total:,.0f}".replace(",", ".")
+    
     # Kirim data ke Apps Script
     payload = {
         "no_sph": sph_data["no_sph"],
-        "tanggal": sph_data["tanggal"],
-        "nama_rs": sph_data["nama_rs"],
-        "sales_nama": sph_data["sales_nama"],
-        "sales_posisi": sph_data["sales_posisi"],
-        "items": sph_data["items"]
+        "replacements": replacements
     }
     
     response = http_requests.post(APPS_SCRIPT_URL, json=payload, timeout=60)
@@ -317,11 +345,19 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("❌ Item tidak ditemukan.")
             return
 
+        raw_harga = item.get("Harga E-Cat 2026", item.get("Harga E-Cat", item.get("Harga", 0)))
+        logging.info(f"Item keys: {list(item.keys())}")
+        logging.info(f"Raw harga value: {raw_harga!r}")
+        try:
+            harga_clean = str(raw_harga).replace("Rp.", "").replace("Rp", "").replace(".", "").replace(",", "").strip()
+            harga_float = float(harga_clean) if harga_clean else 0
+        except:
+            harga_float = 0
         session["pending_item"] = {
-            "id": item_id,
+            "id": str(item.get("Item ID", "")),
             "nama": item.get("Item Name", ""),
             "unit": item.get("Unit", ""),
-            "harga": (lambda x: float(x.replace("Rp.", "").replace("Rp", "").replace(".", "").replace(",", "").strip()) if x.replace("Rp.", "").replace("Rp", "").replace(".", "").replace(",", "").strip() else 0)(str(item.get("Harga E-Cat 2026", item.get("Harga E-Cat", item.get("Harga", 0))))),
+            "harga": harga_float,
             "link": item.get("Link E-katalog V6", "")
         }
         session["step"] = "waiting_qty"
