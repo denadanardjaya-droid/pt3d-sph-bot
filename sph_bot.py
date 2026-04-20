@@ -67,7 +67,6 @@ def lookup_sales(telegram_id):
 
 def search_rs(query):
     gc = get_sheets()
-    # Cari sheet RS - sesuaikan nama sheet
     ws = gc.open_by_key(RS_SPREADSHEET_ID).worksheet("Sheet1")
     records = ws.get_all_records()
     query_lower = query.lower()
@@ -126,18 +125,44 @@ def update_sph_counter(sales_kode, new_counter):
             return
     ws.append_row([sales_kode, now.month, BULAN_ROMAWI[now.month - 1], now.year, new_counter])
 
-def log_sph(no_sph, tanggal, sales_kode, sales_nama, nama_rs, total_items):
+# ─── FIX: log_sph — satu baris per item, semua kolom terisi ──────────────────
+def log_sph(no_sph, tanggal, sales_kode, sales_nama, nama_rs, kab_kota, propinsi, items, link_sph):
     gc = get_sheets()
     ws = gc.open_by_key(SPREADSHEET_ID).worksheet("SPH_Log")
-    ws.append_row([no_sph, tanggal, sales_kode, sales_nama, nama_rs, total_items, "New",
-                   f"https://drive.google.com/drive/folders/{SPH_FOLDER_ID}"])
+
+    rows = []
+    for item in items:
+        harga = float(item.get("harga", 0))
+        qty = int(item.get("qty", 0))
+        total_nilai = harga * qty
+        rows.append([
+            no_sph,          # No_SPH
+            tanggal,         # Tanggal
+            sales_kode,      # Kode_Sales
+            sales_nama,      # Nama_Sales
+            nama_rs,         # Nama_RS
+            kab_kota,        # Kab_Kota
+            propinsi,        # Propinsi
+            item.get("id", ""),    # Item_ID
+            item.get("nama", ""),  # Item_Name
+            qty,             # Qty
+            item.get("unit", ""),  # Unit
+            harga,           # Harga_ECat
+            total_nilai,     # Total_Nilai
+            "New",           # Status
+            "",              # Catatan
+            link_sph         # Link_SPH
+        ])
+
+    if rows:
+        ws.append_rows(rows)
 
 # ─── GENERATE SPH PDF ─────────────────────────────────────────────────────────
 APPS_SCRIPT_URL = os.environ.get("APPS_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbwTCl9VHk-nDHTj8evOesEWM3Tkk6t4GWajimz9EzUlqYBFvK7AnpQH7Qz1WNfWNns/exec")
 
 def generate_sph_pdf(session):
     sph_data = session["sph_data"]
-    
+
     # Build replacements per kolom per baris
     replacements = {
         "{{tanggal}}": sph_data["tanggal"],
@@ -147,7 +172,7 @@ def generate_sph_pdf(session):
         "{{posisiSales}}": sph_data["sales_posisi"],
         "{{ttdSales}}": "",
     }
-    
+
     grand_total = 0
     for i, item in enumerate(sph_data["items"], 1):
         harga = float(item.get("harga", 0))
@@ -162,30 +187,38 @@ def generate_sph_pdf(session):
         replacements[f"{{{{qty_{i}}}}}"] = str(qty)
         replacements[f"{{{{jumlah_{i}}}}}"] = f"Rp {jumlah:,.0f}".replace(",", ".")
         replacements[f"{{{{link_{i}}}}}"] = str(item.get("link", ""))
-    
+
     # Kosongkan placeholder yang tidak terpakai
     for j in range(len(sph_data["items"]) + 1, 21):
         for field in ["no", "id", "nama", "unit", "harga", "qty", "jumlah", "link"]:
             replacements[f"{{{{{field}_{j}}}}}"] = ""
-    
+
     replacements["{{total_grand}}"] = f"Rp {grand_total:,.0f}".replace(",", ".")
-    
+
     # Kirim data ke Apps Script
     payload = {
         "no_sph": sph_data["no_sph"],
         "sales_kode": sph_data.get("sales_kode", ""),
         "replacements": replacements
     }
-    
+
     response = http_requests.post(APPS_SCRIPT_URL, json=payload, timeout=60)
     result = response.json()
-    
+
     if not result.get("success"):
         raise Exception(f"Apps Script error: {result.get('error', 'Unknown error')}")
-    
+
     # Decode PDF dari base64
     pdf_data = base64.b64decode(result["pdf_base64"])
-    return pdf_data, sph_data["no_sph"]
+
+    # Link langsung ke file SPH di Drive (bukan folder)
+    doc_id = result.get("doc_id", "")
+    if doc_id:
+        link_sph = f"https://docs.google.com/document/d/{doc_id}"
+    else:
+        link_sph = f"https://drive.google.com/drive/folders/{SPH_FOLDER_ID}"
+
+    return pdf_data, sph_data["no_sph"], link_sph
 
 # ─── HANDLERS ─────────────────────────────────────────────────────────────────
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -233,7 +266,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [[InlineKeyboardButton(
             f"🏥 {r['NAMA RS']} - {r.get('KAB/KOTA', '')}",
-            callback_data=f"rs:{r['KODE RS']}:{r['NAMA RS'][:30]}:{r.get('KAB/KOTA','')[:20]}"
+            callback_data=f"rs:{r['KODE RS']}:{r['NAMA RS'][:30]}:{r.get('KAB/KOTA','')[:20]}:{r.get('Propinsi','')[:20]}"
         )] for r in results]
 
         await update.message.reply_text(
@@ -275,7 +308,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_session(user_id, session)
 
     else:
-        # KB fallback - bisa tambahkan AI agent di sini nanti
+        # KB fallback
         await update.message.reply_text(
             "Gunakan /sph untuk membuat Surat Penawaran Harga.\n\nUntuk pertanyaan produk, fitur KB segera hadir."
         )
@@ -287,11 +320,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     session = get_session(user_id)
 
-    # Pilih RS
+    # Pilih RS — sekarang simpan juga kab_kota dan propinsi
     if data.startswith("rs:"):
         parts = data.split(":")
-        rs_kode, rs_nama, rs_kota = parts[1], parts[2], parts[3] if len(parts) > 3 else ""
-        session["rs"] = {"kode": rs_kode, "nama": rs_nama, "kota": rs_kota}
+        rs_kode  = parts[1] if len(parts) > 1 else ""
+        rs_nama  = parts[2] if len(parts) > 2 else ""
+        rs_kota  = parts[3] if len(parts) > 3 else ""
+        rs_prop  = parts[4] if len(parts) > 4 else ""
+
+        session["rs"] = {
+            "kode": rs_kode,
+            "nama": rs_nama,
+            "kota": rs_kota,
+            "propinsi": rs_prop
+        }
         session["step"] = "waiting_merk"
         set_session(user_id, session)
 
@@ -338,16 +380,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             idx = int(data.split(":")[1])
             item = items[idx] if idx < len(items) else None
-            item_id = str(item.get("Item ID", "")) if item else ""
         except (ValueError, IndexError):
             item = None
-            item_id = ""
         if not item:
             await query.edit_message_text("❌ Item tidak ditemukan.")
             return
 
         logging.info(f"Item keys: {list(item.keys())}")
-        # Cari kolom harga dengan flexible matching (handle spasi di nama kolom)
         harga_raw = None
         for key in item.keys():
             if 'Harga' in key and 'Cat' in key:
@@ -361,6 +400,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             harga_float = float(harga_clean) if harga_clean else 0
         except:
             harga_float = 0
+
         session["pending_item"] = {
             "id": str(item.get("Item ID", "")),
             "nama": item.get("Item Name", ""),
@@ -424,7 +464,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         try:
-            pdf_bytes, no_sph_label = generate_sph_pdf(session)
+            pdf_bytes, no_sph_label, link_sph = generate_sph_pdf(session)
             await context.bot.send_document(
                 chat_id=query.message.chat_id,
                 document=io.BytesIO(pdf_bytes),
@@ -436,8 +476,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"Silakan kirim ke customer!",
                 parse_mode="Markdown"
             )
-            log_sph(no_sph_label, now.strftime("%d/%m/%Y"), sales["kode"], sales["nama"],
-                    session["rs"]["nama"], len(session["items"]))
+
+            # ─── FIX: log_sph dengan semua kolom ───────────────────────────
+            log_sph(
+                no_sph_label,
+                now.strftime("%d/%m/%Y"),
+                sales["kode"],
+                sales["nama"],
+                session["rs"]["nama"],
+                session["rs"].get("kota", ""),
+                session["rs"].get("propinsi", ""),
+                session["items"],
+                link_sph
+            )
+
         except Exception as e:
             logger.error(f"Error generate SPH: {e}")
             await context.bot.send_message(
