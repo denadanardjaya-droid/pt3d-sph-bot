@@ -68,9 +68,38 @@ def lookup_sales(telegram_id):
 def search_rs(query):
     gc = get_sheets()
     ws = gc.open_by_key(RS_SPREADSHEET_ID).worksheet("Sheet1")
-    records = ws.get_all_records()
+    # Pakai get_all_values() supaya tidak crash kalau ada header duplikat di Database RS
+    values = ws.get_all_values()
+    if not values or len(values) < 2:
+        return []
+    headers = values[0]
+
+    # Cari index kolom yang kita butuhkan
+    def col_idx(name):
+        for i, h in enumerate(headers):
+            if h.strip().upper() == name.upper():
+                return i
+        return -1
+
+    idx_kode    = col_idx("KODE RS")
+    idx_nama    = col_idx("NAMA RS")
+    idx_kota    = col_idx("KAB/KOTA")
+    idx_propinsi = col_idx("Propinsi")
+
     query_lower = query.lower()
-    return [r for r in records if query_lower in str(r.get("NAMA RS", "")).lower()][:8]
+    results = []
+    for row in values[1:]:
+        nama = row[idx_nama].strip() if idx_nama >= 0 and idx_nama < len(row) else ""
+        if query_lower in nama.lower():
+            results.append({
+                "KODE RS":  row[idx_kode].strip()     if idx_kode >= 0    and idx_kode < len(row)    else "",
+                "NAMA RS":  nama,
+                "KAB/KOTA": row[idx_kota].strip()     if idx_kota >= 0    and idx_kota < len(row)    else "",
+                "Propinsi": row[idx_propinsi].strip()  if idx_propinsi >= 0 and idx_propinsi < len(row) else "",
+            })
+            if len(results) >= 8:
+                break
+    return results
 
 def get_all_products():
     gc = get_sheets()
