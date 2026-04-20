@@ -293,10 +293,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ RS tidak ditemukan. Coba ketik ulang (minimal 3 huruf):")
             return
 
+        # Simpan hasil search di session — callback_data cukup index, hindari >64 byte
+        session["rs_results"] = results
+        set_session(user_id, session)
+
         keyboard = [[InlineKeyboardButton(
             f"🏥 {r['NAMA RS']} - {r.get('KAB/KOTA', '')}",
-            callback_data=f"rs:{r['KODE RS']}:{r['NAMA RS'][:30]}:{r.get('KAB/KOTA','')[:20]}:{r.get('Propinsi','')[:20]}"
-        )] for r in results]
+            callback_data=f"rs:{i}"
+        )] for i, r in enumerate(results)]
 
         await update.message.reply_text(
             f"✅ Ditemukan *{len(results)}* RS. Pilih yang sesuai:",
@@ -349,19 +353,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     session = get_session(user_id)
 
-    # Pilih RS — sekarang simpan juga kab_kota dan propinsi
+    # Pilih RS — data diambil dari session, bukan callback_data
     if data.startswith("rs:"):
-        parts = data.split(":")
-        rs_kode  = parts[1] if len(parts) > 1 else ""
-        rs_nama  = parts[2] if len(parts) > 2 else ""
-        rs_kota  = parts[3] if len(parts) > 3 else ""
-        rs_prop  = parts[4] if len(parts) > 4 else ""
+        idx = int(data.split(":")[1])
+        rs_results = session.get("rs_results", [])
+        if idx >= len(rs_results):
+            await query.edit_message_text("❌ Session expired. Ketik /sph untuk mulai ulang.")
+            return
+        r = rs_results[idx]
 
         session["rs"] = {
-            "kode": rs_kode,
-            "nama": rs_nama,
-            "kota": rs_kota,
-            "propinsi": rs_prop
+            "kode": r.get("KODE RS", ""),
+            "nama": r.get("NAMA RS", ""),
+            "kota": r.get("KAB/KOTA", ""),
+            "propinsi": r.get("Propinsi", "")
         }
         session["step"] = "waiting_merk"
         set_session(user_id, session)
@@ -376,7 +381,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append(row)
 
         await query.edit_message_text(
-            f"✅ RS dipilih: *{rs_nama}*\n\n*Langkah 2: Pilih Merk Produk*",
+            f"✅ RS dipilih: *{session['rs']['nama']}*\n\n*Langkah 2: Pilih Merk Produk*",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
