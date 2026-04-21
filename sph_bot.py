@@ -67,9 +67,20 @@ def lookup_sales(telegram_id):
 
 def search_rs(query):
     gc = get_sheets()
-    # Cari sheet RS - sesuaikan nama sheet
     ws = gc.open_by_key(RS_SPREADSHEET_ID).worksheet("Sheet1")
-    records = ws.get_all_records()
+    values = ws.get_all_values()
+    if not values:
+        return []
+    headers = values[0]
+    records = []
+    for row in values[1:]:
+        record = {}
+        for i, val in enumerate(row):
+            if i < len(headers):
+                key = headers[i].strip() if headers[i] else f"col_{i}"
+                if key not in record:
+                    record[key] = val
+        records.append(record)
     query_lower = query.lower()
     return [r for r in records if query_lower in str(r.get("NAMA RS", "")).lower()][:8]
 
